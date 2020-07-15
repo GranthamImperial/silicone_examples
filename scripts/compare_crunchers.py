@@ -5,7 +5,6 @@ import pandas as pd
 import pyam
 
 import silicone.database_crunchers as dc
-from src.plotting import _plot_reconstruct_value_with_cruncher
 
 
 """
@@ -29,7 +28,7 @@ def main():
     # A list of all crunchers to investigate, here a reference to the actual cruncher
     crunchers_list = [
         #  dc.LatestTimeRatio,
-        # dc.TimeDepRatio,
+        dc.TimeDepRatio,
         dc.QuantileRollingWindows,
         dc.RMSClosest,
         dc.LinearInterpolation,
@@ -37,7 +36,7 @@ def main():
     ]
     options_list = [
         #  {},
-        # {"same_sign": True},
+        {"same_sign": True},
         {"use_ratio": False},
         {},
         {},
@@ -50,7 +49,7 @@ def main():
     # Leader is a single data class presented as a list.
     leaders = ["Emissions|CO2"]
     # Place to save the infilled data as a csv
-    save_file = "../output/CruncherResults/CruncherComparisonLead_{}.csv".format(
+    save_file = "../Output/CruncherResults/CruncherComparisonLead_stdv_{}.csv".format(
         leaders[0].split("|")[-1]
     )
     # Do we want to save plots? If not, leave as None, else the location to save them.
@@ -146,10 +145,6 @@ def _recalc_and_compare_results(args):
             db = db_filter.filter(scenario=valid_scenarios)
             # Initialise the object that holds the results
             cruncher_instance = crunchers_list[cruncher_ind](db)
-            var_units = db.filter(variable=var_inst).variables(True)["unit"]
-            assert (
-                var_units.size == 1
-            ), "Multiple units involved, this spoils the calculation"
             filler = cruncher_instance.derive_relationship(
                 var_inst, leaders, **options_list[cruncher_ind]
             )
@@ -170,9 +165,9 @@ def _recalc_and_compare_results(args):
             # Set up normalisation
             norm_factor = pd.Series(index=interp_values.index, dtype=float)
             for year in norm_factor.index:
-                norm_factor[year] = max(
+                norm_factor[year] = np.std(
                     db_all.filter(year=year, variable=var_inst).data["value"]
-                ) - min(db_all.filter(year=year, variable=var_inst).data["value"])
+                )
             # Calculate the RMS difference, Normalised by the spread of values
             results_db[crunchers_name_list[cruncher_ind]][var_inst] = (
                 np.nanmean(
@@ -183,16 +178,6 @@ def _recalc_and_compare_results(args):
                     ** 2
                 )
             ) ** 0.5
-            if save_plots:
-                _plot_reconstruct_value_with_cruncher(
-                    var_inst,
-                    var_units,
-                    interp_values,
-                    originals,
-                    crunchers_name_list[cruncher_ind],
-                    save_plots,
-                    db_all,
-                )
         print("Completed cruncher {}".format(crunchers_name_list[cruncher_ind]))
     return results_db
 
