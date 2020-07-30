@@ -85,10 +85,17 @@ def main():
         req for req in db_all.filter(level=1).variables() if req not in leaders
     ]
     db_all.filter(variable=vars_to_crunch + leaders, inplace=True)
-
+    # Set up normalisation
+    norm_factors = pd.DataFrame(index=years, columns=vars_to_crunch, dtype=float)
+    for year in norm_factors.index:
+        for var_inst in vars_to_crunch:
+            norm_factors[var_inst][year] = np.std(
+                db_all.filter(year=year, variable=var_inst).data["value"]
+            )
     all_args = [
         (
             filter_instance,
+            norm_factors,
             db_all,
             vars_to_crunch,
             crunchers_name_list,
@@ -113,6 +120,7 @@ def main():
 def _recalc_and_compare_results(args):
     (
         one_filter,
+        norm_factors,
         db_all,
         vars_to_crunch,
         crunchers_name_list,
@@ -162,18 +170,12 @@ def _recalc_and_compare_results(args):
             assert (
                 interpolated["year"].size == interpolated["year"].unique().size
             ), "The wrong number of years have returned values"
-            # Set up normalisation
-            norm_factor = pd.Series(index=interp_values.index, dtype=float)
-            for year in norm_factor.index:
-                norm_factor[year] = np.std(
-                    db_all.filter(year=year, variable=var_inst).data["value"]
-                )
+
             # Calculate the RMS difference, Normalised by the spread of values
             results_db[crunchers_name_list[cruncher_ind]][var_inst] = (
                 np.nanmean(
                     (
-                        (interp_values - originals)[norm_factor > 0]
-                        / norm_factor[norm_factor > 0]
+                        (interp_values - originals) / norm_factors[var_inst]
                     )
                     ** 2
                 )
